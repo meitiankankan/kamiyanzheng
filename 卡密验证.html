@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>卡密验证工具</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .container { background: #16213e; border-radius: 12px; padding: 32px; width: 560px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+    h1 { text-align: center; margin-bottom: 24px; color: #e94560; font-size: 22px; }
+    label { display: block; margin-bottom: 6px; font-size: 13px; color: #aaa; }
+    input, textarea { width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid #0f3460; background: #0f3460; color: #fff; font-size: 14px; margin-bottom: 16px; outline: none; transition: border 0.2s; }
+    input:focus, textarea:focus { border-color: #e94560; }
+    textarea { height: 120px; resize: vertical; font-family: monospace; }
+    button { width: 100%; padding: 12px; background: #e94560; color: #fff; border: none; border-radius: 8px; font-size: 15px; cursor: pointer; transition: background 0.2s; }
+    button:hover { background: #c73652; }
+    button:disabled { background: #555; cursor: not-allowed; }
+    #results { margin-top: 24px; }
+    .result-item { padding: 10px 14px; border-radius: 8px; margin-bottom: 8px; font-size: 13px; font-family: monospace; display: flex; justify-content: space-between; align-items: center; }
+    .result-item.success { background: #1a3a2a; border-left: 4px solid #4caf50; }
+    .result-item.fail { background: #3a1a1a; border-left: 4px solid #e94560; }
+    .result-item.pending { background: #2a2a1a; border-left: 4px solid #ffc107; }
+    .key { color: #7ec8e3; }
+    .resp { color: #ccc; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #progress { font-size: 13px; color: #aaa; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>卡密验证工具</h1>
+    <label>账号</label>
+    <input type="text" id="username" placeholder="请输入注册账号" />
+    <label>密码</label>
+    <input type="password" id="password" placeholder="请输入使用密码" />
+    <label>卡密列表（每行一个）</label>
+    <textarea id="cardKeys" placeholder="qweq&#10;key2&#10;key3"></textarea>
+    <button id="startBtn" onclick="startVerify()">开始验证</button>
+    <div id="results"></div>
+  </div>
+
+  <script>
+    async function startVerify() {
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value.trim();
+      const rawKeys = document.getElementById('cardKeys').value.trim();
+
+      if (!username || !password || !rawKeys) {
+        alert('请填写账号、密码和卡密');
+        return;
+      }
+
+      const keys = rawKeys.split('\n').map(k => k.trim()).filter(k => k);
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.innerHTML = `<div id="progress">验证中 0 / ${keys.length}...</div>`;
+
+      const btn = document.getElementById('startBtn');
+      btn.disabled = true;
+
+      let done = 0;
+      for (const key of keys) {
+        const item = document.createElement('div');
+        item.className = 'result-item pending';
+        item.innerHTML = `<span class="key">${key}</span><span class="resp">请求中...</span>`;
+        resultsDiv.appendChild(item);
+
+        try {
+          const resp = await fetch('http://111.170.14.34:10036/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, cardKey: key })
+          });
+          const text = await resp.text();
+          let parsed;
+          try { parsed = JSON.parse(text); } catch { parsed = null; }
+          const isSuccess = resp.ok && (!parsed || parsed.code === 0 || parsed.success === true || parsed.msg === 'success');
+          item.className = `result-item ${isSuccess ? 'success' : 'fail'}`;
+          item.querySelector('.resp').textContent = text.length > 80 ? text.slice(0, 80) + '...' : text;
+        } catch (e) {
+          item.className = 'result-item fail';
+          item.querySelector('.resp').textContent = '请求失败: ' + e.message;
+        }
+
+        done++;
+        document.getElementById('progress').textContent = `验证中 ${done} / ${keys.length}...`;
+      }
+
+      document.getElementById('progress').textContent = `✅ 全部完成，共验证 ${keys.length} 个卡密`;
+      btn.disabled = false;
+    }
+  </script>
+</body>
+</html>
